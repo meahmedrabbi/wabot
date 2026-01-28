@@ -1,7 +1,7 @@
 {
   "name": "whatsapp-bot-free",
   "version": "1.0.0",
-  "description": "A completely free WhatsApp bot using whatsapp-web.js",
+  "description": "A completely free WhatsApp bot using Baileys (no Chrome required)",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
@@ -10,15 +10,16 @@
   "keywords": [
     "whatsapp",
     "bot",
-    "whatsapp-web.js",
+    "baileys",
     "free"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "whatsapp-web.js": "^1.26.0",
+    "@whiskeysockets/baileys": "^6.7.16",
     "qrcode-terminal": "^0.12.0",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "pino": "^9.6.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

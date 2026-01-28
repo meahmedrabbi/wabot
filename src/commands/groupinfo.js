@@ -5,42 +5,51 @@ module.exports = {
     usage: '!groupinfo',
     groupOnly: true,
 
-    async execute(client, message, args) {
-        const chat = await message.getChat();
+    async execute(sock, message, args) {
+        const jid = message.from;
 
-        // Get group metadata
-        const groupName = chat.name;
-        const groupDesc = chat.description || 'No description';
-        const participants = chat.participants;
-        const totalMembers = participants.length;
+        try {
+            // Get group metadata
+            const groupMetadata = await sock.groupMetadata(jid);
 
-        // Count admins
-        const admins = participants.filter(p => p.isAdmin || p.isSuperAdmin);
-        const adminCount = admins.length;
+            const groupName = groupMetadata.subject;
+            const groupDesc = groupMetadata.desc || 'No description';
+            const participants = groupMetadata.participants;
+            const totalMembers = participants.length;
 
-        // Get creation date if available
-        const createdAt = chat.createdAt
-            ? new Date(chat.createdAt * 1000).toLocaleDateString()
-            : 'Unknown';
+            // Count admins
+            const admins = participants.filter(p => p.admin === 'admin' || p.admin === 'superadmin');
+            const adminCount = admins.length;
 
-        // Build admin list
-        let adminList = '';
-        for (const admin of admins.slice(0, 5)) { // Show max 5 admins
-            const contact = await client.getContactById(admin.id._serialized);
-            adminList += `▸ ${contact.pushname || contact.number}\n`;
+            // Get creation date
+            const createdAt = groupMetadata.creation
+                ? new Date(groupMetadata.creation * 1000).toLocaleDateString()
+                : 'Unknown';
+
+            // Build admin list
+            let adminList = '';
+            for (const admin of admins.slice(0, 5)) {
+                const number = admin.id.split('@')[0];
+                const role = admin.admin === 'superadmin' ? '(Owner)' : '';
+                adminList += `▸ ${number} ${role}\n`;
+            }
+            if (admins.length > 5) {
+                adminList += `▸ ... and ${admins.length - 5} more`;
+            }
+
+            const infoMessage = `📊 *Group Information*\n\n` +
+                `📛 *Name:* ${groupName}\n` +
+                `👥 *Members:* ${totalMembers}\n` +
+                `👑 *Admins:* ${adminCount}\n` +
+                `📅 *Created:* ${createdAt}\n\n` +
+                `📝 *Description:*\n${groupDesc}\n\n` +
+                `👑 *Admin List:*\n${adminList}`;
+
+            await message.reply(infoMessage);
+
+        } catch (error) {
+            console.error('Groupinfo command error:', error);
+            await message.reply('❌ Failed to get group info. Make sure the bot has permission to access group info.');
         }
-        if (admins.length > 5) {
-            adminList += `▸ ... and ${admins.length - 5} more`;
-        }
-
-        const infoMessage = `📊 *Group Information*\n\n` +
-            `📛 *Name:* ${groupName}\n` +
-            `👥 *Members:* ${totalMembers}\n` +
-            `👑 *Admins:* ${adminCount}\n` +
-            `📅 *Created:* ${createdAt}\n\n` +
-            `📝 *Description:*\n${groupDesc}\n\n` +
-            `👑 *Admin List:*\n${adminList}`;
-
-        await message.reply(infoMessage);
     }
 };

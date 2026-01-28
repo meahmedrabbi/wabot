@@ -51,8 +51,8 @@ module.exports = {
 ▸ Auto Read: ${config.features.autoRead ? '✅' : '❌'}
 
 ━━━━━━━━━━━━━━━━━━━━━
-*Powered by whatsapp-web.js*
-💡 100% Free & Open Source`;
+*Powered by Baileys*
+💡 100% Free - No Chrome needed!`;
 
         await message.reply(infoMessage);
     }

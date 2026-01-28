@@ -1,49 +1,47 @@
-const { MessageMedia } = require('whatsapp-web.js');
-
 module.exports = {
     name: 'sticker',
     aliases: ['s', 'stiker', 'stick'],
     description: 'Convert an image or video to a sticker',
     usage: '!sticker (reply to or send with an image/video)',
 
-    async execute(client, message, args) {
-        let media;
+    async execute(sock, message, args) {
+        const jid = message.from;
+        let mediaMessage = null;
 
         // Check if message has media
-        if (message.hasMedia) {
-            media = await message.downloadMedia();
+        if (message.hasMedia()) {
+            mediaMessage = message;
         }
         // Check if it's a reply to a message with media
-        else if (message.hasQuotedMsg) {
-            const quotedMsg = await message.getQuotedMessage();
-            if (quotedMsg.hasMedia) {
-                media = await quotedMsg.downloadMedia();
+        else {
+            const quoted = message.getQuotedMessage();
+            if (quoted) {
+                const quotedMsg = quoted.message;
+                if (quotedMsg?.imageMessage || quotedMsg?.videoMessage || quotedMsg?.stickerMessage) {
+                    mediaMessage = quoted;
+                }
             }
         }
 
         // No media found
-        if (!media) {
+        if (!mediaMessage) {
             return message.reply(
                 '❌ *No media found!*\n\n' +
                 'Please send an image/video with the command, or reply to an image/video with !sticker'
             );
         }
 
-        // Check media type
-        const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4'];
-        if (!validTypes.some(type => media.mimetype.includes(type.split('/')[1]))) {
-            return message.reply('❌ Invalid media type. Please send an image, GIF, or short video.');
-        }
-
         try {
             await message.reply('⏳ Creating sticker...');
 
+            // Download media
+            const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+            const buffer = await downloadMediaMessage(mediaMessage, 'buffer', {});
+
             // Send as sticker
-            await client.sendMessage(message.from, media, {
-                sendMediaAsSticker: true,
-                stickerName: args.join(' ') || 'WhatsApp Bot',
-                stickerAuthor: 'WA Bot'
-            });
+            await sock.sendMessage(jid, {
+                sticker: buffer
+            }, { quoted: message });
 
         } catch (error) {
             console.error('Sticker creation error:', error);

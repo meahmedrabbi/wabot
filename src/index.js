@@ -1,105 +1,126 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const {
+    default: makeWASocket,
+    DisconnectReason,
+    useMultiFileAuthState,
+    fetchLatestBaileysVersion
+} = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
+const pino = require('pino');
 require('dotenv').config();
 
 const config = require('./config');
 const messageHandler = require('./handlers/messageHandler');
 
-// Initialize WhatsApp client with local authentication (saves session)
-const client = new Client({
-    authStrategy: new LocalAuth({
-        dataPath: './session'
-    }),
-    puppeteer: {
-        headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu'
-        ]
-    }
-});
+// Main function to start the bot
+async function startBot() {
+    // Load authentication state from file
+    const { state, saveCreds } = await useMultiFileAuthState('./session');
 
-// QR Code event - scan this with your WhatsApp
-client.on('qr', (qr) => {
-    console.log('\n📱 Scan this QR code with your WhatsApp:\n');
-    qrcode.generate(qr, { small: true });
-    console.log('\nOpen WhatsApp > Settings > Linked Devices > Link a Device\n');
-});
+    // Get latest Baileys version
+    const { version } = await fetchLatestBaileysVersion();
+    console.log(`🔄 Using WA v${version.join('.')}`);
 
-// Ready event - bot is connected
-client.on('ready', () => {
-    console.log('✅ WhatsApp Bot is ready!');
-    console.log(`📱 Logged in as: ${client.info.pushname}`);
-    console.log(`📞 Phone number: ${client.info.wid.user}`);
-    console.log(`\n🤖 Bot is now listening for messages...`);
-    console.log(`💡 Send "${config.prefix}help" to any chat to see available commands\n`);
-});
+    // Create the socket connection
+    const sock = makeWASocket({
+        version,
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false, // We'll handle QR manually for better display
+        auth: state,
+        browser: ['WhatsApp Bot', 'Chrome', '120.0.0'],
+        syncFullHistory: false,
+        markOnlineOnConnect: true
+    });
 
-// Authentication success
-client.on('authenticated', () => {
-    console.log('🔐 Authentication successful!');
-});
+    // Handle connection updates
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
 
-// Authentication failure
-client.on('auth_failure', (msg) => {
-    console.error('❌ Authentication failed:', msg);
-});
-
-// Disconnected
-client.on('disconnected', (reason) => {
-    console.log('📴 Client disconnected:', reason);
-    console.log('🔄 Attempting to reconnect...');
-    client.initialize();
-});
-
-// Message event - handle incoming messages
-client.on('message', async (message) => {
-    try {
-        await messageHandler(client, message);
-    } catch (error) {
-        console.error('Error handling message:', error);
-    }
-});
-
-// Message creation event (includes own messages)
-client.on('message_create', async (message) => {
-    // Only process if it's from the bot itself and starts with prefix
-    if (message.fromMe && message.body.startsWith(config.prefix)) {
-        try {
-            await messageHandler(client, message);
-        } catch (error) {
-            console.error('Error handling own message:', error);
+        // Display QR code
+        if (qr) {
+            console.log('\n📱 Scan this QR code with your WhatsApp:\n');
+            qrcode.generate(qr, { small: true });
+            console.log('\nOpen WhatsApp > Settings > Linked Devices > Link a Device\n');
         }
-    }
-});
 
-// Group join event
-client.on('group_join', async (notification) => {
-    console.log(`👋 Someone joined a group`);
-    // You can send a welcome message here
-    // const chat = await notification.getChat();
-    // chat.sendMessage('Welcome to the group! 🎉');
-});
+        // Connection opened
+        if (connection === 'open') {
+            const user = sock.user;
+            console.log('✅ WhatsApp Bot is ready!');
+            console.log(`📱 Logged in as: ${user?.name || 'Unknown'}`);
+            console.log(`📞 Phone number: ${user?.id?.split(':')[0] || 'Unknown'}`);
+            console.log(`\n🤖 Bot is now listening for messages...`);
+            console.log(`💡 Send "${config.prefix}help" to any chat to see available commands\n`);
+        }
+
+        // Connection closed
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+
+            console.log('📴 Connection closed:', lastDisconnect?.error?.message || 'Unknown reason');
+
+            if (shouldReconnect) {
+                console.log('🔄 Reconnecting...');
+                startBot();
+            } else {
+                console.log('❌ Logged out. Please delete the session folder and restart.');
+            }
+        }
+    });
+
+    // Save credentials when they update
+    sock.ev.on('creds.update', saveCreds);
+
+    // Handle incoming messages
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        // Only process new messages (not history sync)
+        if (type !== 'notify') return;
+
+        for (const message of messages) {
+            // Skip if no message content
+            if (!message.message) continue;
+
+            // Skip status broadcasts
+            if (message.key.remoteJid === 'status@broadcast') continue;
+
+            try {
+                await messageHandler(sock, message);
+            } catch (error) {
+                console.error('Error handling message:', error);
+            }
+        }
+    });
+
+    // Handle group participants update (joins/leaves)
+    sock.ev.on('group-participants.update', async (update) => {
+        const { id, participants, action } = update;
+
+        if (action === 'add' && config.welcomeMessage.enabled) {
+            const chat = id;
+            for (const participant of participants) {
+                const welcomeMsg = config.welcomeMessage.message.replace('{user}', `@${participant.split('@')[0]}`);
+                await sock.sendMessage(chat, {
+                    text: welcomeMsg,
+                    mentions: [participant]
+                });
+            }
+        }
+    });
+
+    return sock;
+}
 
 // Handle process termination gracefully
-process.on('SIGINT', async () => {
+process.on('SIGINT', () => {
     console.log('\n🛑 Shutting down gracefully...');
-    await client.destroy();
     process.exit(0);
 });
 
-process.on('SIGTERM', async () => {
+process.on('SIGTERM', () => {
     console.log('\n🛑 Shutting down gracefully...');
-    await client.destroy();
     process.exit(0);
 });
 
-// Initialize the client
+// Start the bot
 console.log('🚀 Starting WhatsApp Bot...');
 console.log('⏳ Please wait while initializing...\n');
-client.initialize();
+startBot().catch(console.error);

@@ -1,10 +1,12 @@
 # WhatsApp Bot (100% Free)
 
-A completely free WhatsApp bot built with [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js). No paid APIs required!
+A completely free WhatsApp bot built with [Baileys](https://github.com/WhiskeySockets/Baileys). No paid APIs or Chrome/Puppeteer required!
 
 ## Features
 
-- **Free Forever** - Uses WhatsApp Web, no paid API needed
+- **Free Forever** - Uses WhatsApp Web protocol, no paid API needed
+- **No Chrome Required** - Unlike other libraries, Baileys doesn't need Puppeteer/Chrome
+- **Low Memory Usage** - Runs smoothly on low-end VPS (512MB RAM is enough)
 - **Easy Setup** - Just scan QR code with your phone
 - **Persistent Session** - Stay logged in across restarts
 - **Command System** - Extensible command handler with cooldowns
@@ -61,7 +63,7 @@ npm start
 | `!quote` | `!q` | Get inspirational quote |
 | `!calc` | `!math` | Calculator |
 | `!owner` | `!dev` | Bot owner info |
-| `!broadcast` | `!bc` | Send to all chats (owner only) |
+| `!broadcast` | `!bc` | Send to all groups (owner only) |
 
 ## Adding New Commands
 
@@ -77,9 +79,18 @@ module.exports = {
     groupOnly: false,  // Set true for group-only commands
     ownerOnly: false,  // Set true for owner-only commands
 
-    async execute(client, message, args) {
-        // Your command logic here
+    async execute(sock, message, args) {
+        // sock = Baileys socket instance
+        // message = message wrapper with helper methods
+        // args = command arguments array
+
         await message.reply('Hello from my command!');
+
+        // Send with reaction
+        await message.react('👍');
+
+        // Send to specific chat
+        await sock.sendMessage(message.from, { text: 'Hello!' });
     }
 };
 ```
@@ -126,24 +137,19 @@ npm start
 
 ### QR Code Not Showing
 - Make sure you have a terminal that supports Unicode
-- Try running with `DEBUG=whatsapp-web.js* npm start`
+- Try a different terminal emulator
 
 ### Session Expired
 - Delete the `session/` folder
 - Restart the bot and scan QR again
 
-### Puppeteer Issues on VPS
+### Connection Issues
+- Make sure your VPS has internet access
+- Check if WhatsApp Web is accessible from your region
+- Try restarting the bot
 
-Install required dependencies:
-
-```bash
-# Ubuntu/Debian
-sudo apt-get install -y gconf-service libasound2 libatk1.0-0 libc6 libcairo2 libcups2 libdbus-1-3 libexpat1 libfontconfig1 libgcc1 libgconf-2-4 libgdk-pixbuf2.0-0 libglib2.0-0 libgtk-3-0 libnspr4 libpango-1.0-0 libpangocairo-1.0-0 libstdc++6 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 libxfixes3 libxi6 libxrandr2 libxrender1 libxss1 libxtst6 ca-certificates fonts-liberation libappindicator1 libnss3 lsb-release xdg-utils wget libgbm-dev
-```
-
-### High Memory Usage
-
-The bot uses Puppeteer (Chrome) which requires memory. Minimum recommended: 1GB RAM.
+### Memory Usage
+Baileys is lightweight and typically uses only 50-150MB RAM. If you're experiencing high memory usage, check for memory leaks in custom commands.
 
 ## Project Structure
 
@@ -167,6 +173,16 @@ wabot/
 ├── package.json
 └── README.md
 ```
+
+## Why Baileys?
+
+| Feature | Baileys | whatsapp-web.js |
+|---------|---------|-----------------|
+| Chrome Required | No | Yes |
+| RAM Usage | ~50-150MB | ~500MB-1GB |
+| Setup Complexity | Simple | Complex (needs Chrome deps) |
+| Speed | Fast | Slower |
+| VPS Friendly | Yes | Requires more resources |
 
 ## Disclaimer
 
