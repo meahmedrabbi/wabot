@@ -1,5 +1,4 @@
 const config = require('../config');
-const commands = require('./index');
 
 module.exports = {
     name: 'help',
@@ -9,6 +8,9 @@ module.exports = {
 
     async execute(client, message, args) {
         const prefix = config.prefix;
+
+        // Load commands here to avoid circular dependency
+        const commands = require('./index');
 
         // If a specific command is requested
         if (args.length > 0) {
@@ -40,16 +42,16 @@ module.exports = {
         helpMessage += `╰━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
         helpMessage += `*Available Commands:*\n\n`;
 
-        // Group commands by category (if you add categories later)
+        // Build command list from Map
         const commandList = [];
-        commands.forEach((cmd, name) => {
+        for (const [name, cmd] of commands) {
             commandList.push({
                 name,
                 description: cmd.description || 'No description',
                 ownerOnly: cmd.ownerOnly || false,
                 groupOnly: cmd.groupOnly || false
             });
-        });
+        }
 
         // Sort alphabetically
         commandList.sort((a, b) => a.name.localeCompare(b.name));
