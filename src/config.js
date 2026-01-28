@@ -1,6 +1,6 @@
 module.exports = {
-    // Bot prefix for commands (e.g., !help, !ping)
-    prefix: process.env.BOT_PREFIX || '!',
+    // Bot prefix for commands (e.g., /help, /ping)
+    prefix: process.env.BOT_PREFIX || '/',
 
     // Bot owner's phone number (without + or spaces, e.g., 1234567890)
     ownerNumber: process.env.OWNER_NUMBER || '',
