@@ -28,7 +28,12 @@ function setupDirectories() {
 // Extract zip file to a directory
 function extractZip(zipPath, outputPath) {
     console.log(`Extracting ${zipPath}...`);
-    execSync(`unzip -q "${zipPath}" -d "${outputPath}"`);
+    try {
+        execSync(`unzip -q "${zipPath}" -d "${outputPath}"`);
+    } catch (error) {
+        console.error(`Failed to extract ${zipPath}: ${error.message}`);
+        throw error;
+    }
 }
 
 // Get list of phone numbers from a directory
@@ -49,7 +54,9 @@ function getPhoneNumbers(dir) {
 
 // Find common phone numbers between two arrays
 function findCommonNumbers(seller1Numbers, buyerNumbers) {
-    const commonNumbers = seller1Numbers.filter(num => buyerNumbers.includes(num));
+    // Use Set for O(n) lookup instead of O(n²) with includes
+    const buyerSet = new Set(buyerNumbers);
+    const commonNumbers = seller1Numbers.filter(num => buyerSet.has(num));
     return commonNumbers;
 }
 
@@ -116,9 +123,13 @@ function createMatchedZip(phoneNumber, seller1Dir, buyerDir) {
     }
     
     // Create zip file
-    process.chdir(tempZipDir);
-    execSync(`zip -r "${zipPath}" .`);
-    process.chdir(__dirname);
+    try {
+        // Use -C option or cd in a subshell to avoid changing process directory
+        execSync(`cd "${tempZipDir}" && zip -r "${zipPath}" .`);
+    } catch (error) {
+        console.error(`Failed to create zip file for +${phoneNumber}: ${error.message}`);
+        throw error;
+    }
     
     // Clean up temp directory for this zip
     fs.rmSync(tempZipDir, { recursive: true, force: true });
